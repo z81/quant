@@ -22,6 +22,6 @@ quant.addClient('local', {
 }).addClient('stats', {
     token: "securetoken",
     allowCommands: {
-        execute: [':quant:status:']
+        execute: [Quant.statuses.status]
     }
 });

@@ -81,6 +81,12 @@ class Quant {
     }
 
     _onCommand(data, returnSocket) {
+        if (returnSocket.client && returnSocket.client.allowCommands && returnSocket.client.allowCommands.run) {
+            if (returnSocket.client.allowCommands.run.indexOf(data.command) === -1) {
+                console.warn(`Access denied: run ${data.command} / client name: ${returnSocket.clientName}`);
+                return;
+            }
+        }
         for(let [sock] of this.connections) {
             const client = sock.client;
             if (client && client.allowCommands && client.allowCommands.execute) {
@@ -93,7 +99,7 @@ class Quant {
     }
 
     _runCommand({ command, data, id, done }, sock, returnSocket) {
-        this._log('run command on', sock.clientName);
+        this._log('Run command on', command, sock.clientName);
         try {
             sock.write(JSON.stringify({ done, command, data, id }));
             if (returnSocket) {
