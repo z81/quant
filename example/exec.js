@@ -9,10 +9,12 @@ const q = new Quant({
     ca: [ fs.readFileSync(__dirname + '/../server/server-certificate.pem')  ]
 });
 
-setTimeout(() => {
-    const task = q.run('delayed', 100);
+setInterval(() => {
+    const num1 = Math.round(Math.random() * 10);
+    const num2 = Math.round(Math.random() * 10);
 
-    task.on('data', data => {
-        console.log('data', data)
+    console.log(`Sum ${num1} + ${num2} = ?`);
+    q.run('sum', [num1, num2]).on('end', data => {
+        console.log('=', data)
     });
 }, 1000);

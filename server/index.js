@@ -17,10 +17,16 @@ class Quant {
         this.runningCommands = new Map();
     }
 
+    _log(text) {
+        if (this.config.debug) {
+            console.log(text);
+        }
+    }
+
     _onData(socket, data) {
         try {
             data = JSON.parse(data.toString());
-            if (data.command === ':quant:auth:') {
+            if (data.command === Quant.statuses.auth) {
                 this._auth(data.data, socket);
             }
             else {
@@ -28,10 +34,13 @@ class Quant {
                     return void socket.end();
                 }
                 
-                if (data.command === ':quant:status:') {
-                    this._updStatus(data.data, socket);
+                if (data.command === Quant.statuses.status) {
+                    socket.status = data.data;
+                    data.data.clientName = socket.clientName;
+
+                    this._onCommand(data, socket);
                 }
-                else if (data.command === ':quant:return:') {
+                else if (data.command === Quant.statuses.return) {
                     this._onReturn(data);
                 }
                 else {
@@ -52,24 +61,21 @@ class Quant {
     }
 
     _onEnd(socket) {
-        console.log('Disconnected ', socket.clientName);
+        this._log('Disconnected ', socket.clientName);
         this.connections.delete(socket);
     }
 
-    _updStatus(data, socket) {
-        socket.status = data;
-    }
 
     _auth({ name, token }, socket) {
         const client = this.clients.get(name);
         if (client && client.token === token) {
-            console.log('Auth success', name);
+            this._log('Auth success', name);
             socket.client = client;
             socket.clientName = name;
             socket.isAuth = true;
         }
         else {
-            console.log('Auth fail', name);
+            this._log('Auth fail', name);
             socket.end();
         }
     }
@@ -83,18 +89,19 @@ class Quant {
                 }
             }
         }
-        console.log('onCommand', data.command, data.data);
+        this._log('onCommand', data.command, data.data);
     }
 
-    _runCommand({ command, data, id }, sock, returnSocket) {
-        console.log('run command on', sock.clientName);
+    _runCommand({ command, data, id, done }, sock, returnSocket) {
+        this._log('run command on', sock.clientName);
         try {
-            sock.write(JSON.stringify({ command, data, id }));
+            sock.write(JSON.stringify({ done, command, data, id }));
             if (returnSocket) {
                 this.runningCommands.set(id, {
                     sock,
                     command,
                     data,
+                    done,
                     returnSocket
                 });
             }
@@ -106,6 +113,7 @@ class Quant {
 
     addClient(name, config) {
         this.clients.set(name, config);
+        return this;
     }
 
     createServer() {
@@ -116,10 +124,17 @@ class Quant {
         });
 
         this._server.listen(this.config.port, () => {
-            console.log('Server running');
+            this._log('Server running');
         });
     }
 }
 
+Quant.statuses = {
+    'return': ':quant:return:',
+    'auth': ':quant:auth:',
+    'status': ':quant:status:'
+};
+
+Quant.load = path => fs.readFileSync(path);
 
 module.exports = Quant;

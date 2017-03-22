@@ -34,7 +34,7 @@ class Quant {
 
     _onError(err) {
         console.error('Error: ', err.message);
-        console.log('Reconnecting');
+        this._log('Reconnecting');
         setTimeout(this.connect.bind(this), this.config.reconnectTimeout);
     }
 
@@ -47,6 +47,11 @@ class Quant {
             }
             else if (this.runingCommands.has(data.id)) {
                 const events = this.runingCommands.get(data.id).events;
+                if (data.done) {
+                    if (events.end) events.end(data.data);
+                    if (events.done) events.done(data.data);
+                    if (events.success) events.success(data.data);
+                }
                 if (events.data) {
                     events.data(data.data);
                 }
@@ -58,7 +63,13 @@ class Quant {
     }
 
     makeTask(action, data) {
-        const send = _data => this.fire(':quant:return:', _data, data.id);
+        const send = params => {
+            this.send(Object.assign({}, {
+                command: Quant.statuses.return,
+                id: data.id
+            }, params));
+        };
+
         const command = {
             setStatus: (status, progress) => send({ status, progress }),
             setProgress: (progress, status) => send({ progress, status }),
@@ -71,7 +82,7 @@ class Quant {
 
     registerSystemStatusWatcher() {
         setInterval(() => {
-            this.fire(':quant:status:', {
+            this.fire(Quant.statuses.status, {
                 totalmem: os.totalmem(),
                 freemem: os.freemem(),
                 loadavg: os.loadavg(),
@@ -81,8 +92,8 @@ class Quant {
     }
 
     _onConnect() {
-        console.log('Connected');
-        this.fire(':quant:auth:', {
+        this._log('Connected to server success');
+        this.fire(Quant.statuses.auth, {
             name: this.config.name,
             token: this.config.token
         });
@@ -90,7 +101,7 @@ class Quant {
 
     run(name, data) {
         const id = crypto.randomBytes(64).toString('hex');
-        console.log('Run ', name, data);
+        this._log('Task started ', name, data);
         this.fire(name, data, id);
         this.runingCommands.set(id, {
             events: {}
@@ -105,19 +116,36 @@ class Quant {
         this.runingCommands.get(id).events[name] = clb; 
     }
 
-    fire(command, data, id) {
+    send(data) {
         try {
-            this.socket.write(JSON.stringify({ command, data, id }));
+            this.socket.write(JSON.stringify(data));
         }
         catch(e) {
             console.error(e);
         }
     }
 
+    fire(command, data, id) {
+        this.send({ command, data, id });
+    }
+
     register(name, clb) {
         this.actions.set(name, clb);
     }
+
+    _log(text) {
+        if (this.config.debug) {
+            console.log(text)
+        }
+    }
 }
 
+Quant.statuses = {
+    'return': ':quant:return:',
+    'auth': ':quant:auth:',
+    'status': ':quant:status:'
+};
+
+Quant.load = path => fs.readFileSync(path);
 
 module.exports = Quant;
