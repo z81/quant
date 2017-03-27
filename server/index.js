@@ -9,20 +9,36 @@ const defaultConfig = {
 };
 
 class Quant {
+    /**
+     * Qaunt Configuration
+     * @param config
+     */
     constructor(config = {}) {
         this.config = Object.assign({}, defaultConfig, config);
-        this.createServer();
+        this._createServer();
         this.connections = new Map();
         this.clients = new Map();
         this.runningCommands = new Map();
     }
 
+    /**
+     * Logger
+     * @param text
+     * @private
+     */
     _log(text) {
         if (this.config.debug) {
             console.log(text);
         }
     }
 
+    /**
+     * On socket datra
+     * @param socket
+     * @param data
+     * @returns undefined
+     * @private
+     */
     _onData(socket, data) {
         try {
             data = JSON.parse(data.toString());
@@ -53,6 +69,11 @@ class Quant {
         }
     }
 
+    /**
+     * return data action
+     * @param data
+     * @private
+     */
     _onReturn(data) {
         const { command, returnSocket } = this.runningCommands.get(data.id);
         if (command) {
@@ -60,12 +81,23 @@ class Quant {
         }
     }
 
+    /**
+     * Disconnect event
+     * @param socket
+     * @private
+     */
     _onEnd(socket) {
         this._log('Disconnected ', socket.clientName);
         this.connections.delete(socket);
     }
 
-
+    /**
+     * Auth action
+     * @param name
+     * @param token
+     * @param socket
+     * @private
+     */
     _auth({ name, token }, socket) {
         const client = this.clients.get(name);
         if (client && client.token === token) {
@@ -80,13 +112,31 @@ class Quant {
         }
     }
 
-    _onCommand(data, returnSocket) {
-        if (returnSocket.client && returnSocket.client.allowCommands && returnSocket.client.allowCommands.run) {
-            if (returnSocket.client.allowCommands.run.indexOf(data.command) === -1) {
-                console.warn(`Access denied: run ${data.command} / client name: ${returnSocket.clientName}`);
-                return;
+    /**
+     *
+     * @param command
+     * @param socket
+     * @returns {boolean}
+     */
+    isAllowedCommand(command, socket) {
+        if (socket.client && socket.client.allowCommands && socket.client.allowCommands.run) {
+            if (socket.client.allowCommands.run.indexOf(data.command) === -1) {
+                console.warn(`Access denied: run ${data.command} / client name: ${socket.clientName}`);
+                return false;
             }
         }
+
+        return true;
+    }
+    /**
+     * Run client action
+     * @param data
+     * @param returnSocket
+     * @private
+     */
+    _onCommand(data, returnSocket) {
+        if (!this.isAllowedCommand(data.command, returnSocket)) return;
+
         for(let [sock] of this.connections) {
             const client = sock.client;
             if (client && client.allowCommands && client.allowCommands.execute) {
@@ -95,11 +145,23 @@ class Quant {
                 }
             }
         }
+
         this._log('onCommand', data.command, data.data);
     }
 
+    /**
+     * Run command on sock
+     * @param command
+     * @param data
+     * @param id
+     * @param done
+     * @param sock
+     * @param returnSocket
+     * @private
+     */
     _runCommand({ command, data, id, done }, sock, returnSocket) {
         this._log('Run command on', command, sock.clientName);
+
         try {
             sock.write(JSON.stringify({ done, command, data, id }));
             if (returnSocket) {
@@ -117,12 +179,23 @@ class Quant {
         }
     }
 
+    /**
+     * Client ACL
+     * @param name
+     * @param config
+     * @returns {Quant}
+     */
     addClient(name, config) {
         this.clients.set(name, config);
         return this;
     }
 
-    createServer() {
+    /**
+     * Run server
+     * @returns undefined
+     * @private
+     */
+    _createServer() {
         this._server = tls.createServer(this.config, socket => {
             this.connections.set(socket);
             socket.on('data', this._onData.bind(this, socket));
