@@ -11,12 +11,16 @@ const q = new Quant({
     ca: [ fs.readFileSync(__dirname + '/../server/server-certificate.pem')  ]
 });
 
-const statuses  = new Map();
-
+const statuses = new Map();
+let tasks = [];
 q.register(Quant.statuses.status, (data, task) => {
     if (data.clientName === 'stats') return;
 
     statuses.set(data.clientName, data);
+});
+
+q.register(Quant.statuses.tasks, (data, task) => {
+    tasks = data;
 });
 
 setInterval(() => {
@@ -28,5 +32,10 @@ setInterval(() => {
             uptime = humanizeDuration(status.uptime * 1000);
 
         console.log('Name:', name, `| Uptime: ${uptime} | CPU: ${cpu} % | Mem free: ${percentMem}% / ${freeMem} of ${totalMem}`);
+    }
+
+    console.log('Running tasks');
+    for(let task of tasks) {
+        console.log(`Name: ${task.command} | Args: `,task.data);
     }
 }, 1000);

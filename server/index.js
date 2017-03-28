@@ -75,9 +75,9 @@ class Quant {
      * @private
      */
     _onReturn(data) {
-        const { command, returnSocket } = this.runningCommands.get(data.id);
-        if (command) {
-            this._runCommand(data, returnSocket);
+        const task = this.runningCommands.get(data.id);
+        if (task && task.command) {
+            this._runCommand(data, task.returnSocket);
         }
     }
 
@@ -120,8 +120,8 @@ class Quant {
      */
     isAllowedCommand(command, socket) {
         if (socket.client && socket.client.allowCommands && socket.client.allowCommands.run) {
-            if (socket.client.allowCommands.run.indexOf(data.command) === -1) {
-                console.warn(`Access denied: run ${data.command} / client name: ${socket.clientName}`);
+            if (socket.client.allowCommands.run.indexOf(command) === -1) {
+                console.warn(`Access denied: run ${command} / client name: ${socket.clientName}`);
                 return false;
             }
         }
@@ -149,6 +149,34 @@ class Quant {
         this._log('onCommand', data.command, data.data);
     }
 
+    _sendTaskStats() {
+        const data = Array.from(this.runningCommands)
+            .filter(data => data[1].command !== Quant.statuses.status)
+            .map(data => {
+
+            return {
+                progress: data[1].progress,
+                status: data[1].status,
+                command: data[1].command,
+                data: data[1].data,
+                done: data[1].done,
+            };
+        });
+
+        //Todo: fix
+        for(let [sock] of this.connections) {
+            const client = sock.client;
+            if (client && client.allowCommands && client.allowCommands.execute) {
+                if (client.allowCommands.execute.indexOf(Quant.statuses.tasks) > -1) {
+                    sock.write(JSON.stringify({
+                        command: Quant.statuses.tasks,
+                        data: data
+                    }));
+                }
+            }
+        }
+        console.log('runung tasks', JSON.stringify(data))
+    }
     /**
      * Run command on sock
      * @param command
@@ -159,19 +187,27 @@ class Quant {
      * @param returnSocket
      * @private
      */
-    _runCommand({ command, data, id, done }, sock, returnSocket) {
+    _runCommand({ command, data, id, done, progress, status }, sock, returnSocket) {
         this._log('Run command on', command, sock.clientName);
 
         try {
-            sock.write(JSON.stringify({ done, command, data, id }));
+            sock.write(JSON.stringify({ done, command, data, id, progress, status }));
             if (returnSocket) {
+                console.log('return socket', data, id);
                 this.runningCommands.set(id, {
                     sock,
                     command,
                     data,
                     done,
-                    returnSocket
+                    returnSocket,
+                    progress,
+                    status
                 });
+                this._sendTaskStats();
+            }
+
+            if (done) {
+                this.runningCommands.delete(id);
             }
         } 
         catch(e) {
@@ -180,7 +216,7 @@ class Quant {
     }
 
     /**
-     * Client ACL
+     *
      * @param name
      * @param config
      * @returns {Quant}
@@ -211,7 +247,8 @@ class Quant {
 Quant.statuses = {
     'return': ':quant:return:',
     'auth': ':quant:auth:',
-    'status': ':quant:status:'
+    'status': ':quant:status:',
+    'tasks': ':quant:tasks:'
 };
 
 Quant.load = path => fs.readFileSync(path);

@@ -215,7 +215,8 @@ class Quant {
 Quant.statuses = {
     'return': ':quant:return:',
     'auth': ':quant:auth:',
-    'status': ':quant:status:'
+    'status': ':quant:status:',
+    'tasks': ':quant:tasks:'
 };
 
 Quant.load = path => fs.readFileSync(path);

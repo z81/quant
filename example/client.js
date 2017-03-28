@@ -10,5 +10,8 @@ const q = new Quant({
 });
 
 q.register('sum', ([num1, num2], task) => {
-    task.done(num1 + num2);
+    task.setProgress(50, 'calc');
+    setTimeout(() => {
+        task.done(num1 + num2);
+    }, 1200);
 });
